@@ -855,6 +855,7 @@ namespace Discord.WebSocket
         /// <summary>
         ///     Clears this guild's user cache.
         /// </summary>
+        /// <param name="predicate">The users to clear.</param>
         public void ClearUserCache(Func<SocketGuildUser, bool> predicate) => PurgeGuildUserCache(predicate);
         internal SocketGuildUser AddOrUpdateUser(UserModel model)
         {
@@ -914,17 +915,15 @@ namespace Discord.WebSocket
         internal void PurgeGuildUserCache() => PurgeGuildUserCache(x => true);
         internal void PurgeGuildUserCache(Func<SocketGuildUser, bool> predicate)
         {
-            var members = Users.Where(predicate);
-            var self = CurrentUser;
+            var membersToPurge = Users.Where(x => predicate.Invoke(x) && x?.Id != Discord.CurrentUser.Id);
+            var membersToKeep = Users.Where(x => !predicate.Invoke(x) || x?.Id == Discord.CurrentUser.Id);
 
-            foreach (var member in members)
-            {
-                if (member.Id != self?.Id)
-                {
-                    _members.TryRemove(member.Id, out _);
+            foreach (var member in membersToPurge)
+                if(_members.TryRemove(member.Id, out _))
                     member.GlobalUser.RemoveRef(Discord);
-                }
-            }
+
+            foreach (var member in membersToKeep)
+                _members.TryAdd(member.Id, member);
 
             DownloadedMemberCount = _members.Count;
         }
